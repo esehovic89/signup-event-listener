@@ -1,0 +1,44 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Description: Serverless application sending welcome messages to new users
+Resources:
+  WelcomeNewUsers:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: app.lambda_handler
+      Runtime: python3.7
+      CodeUri: src/
+      Description: Lambda function subscribing to SNS
+      MemorySize: 128
+      Timeout: 3
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref RecentUsersTable
+          REGION_NAME: !Ref AWS::Region
+          NOTIFICATION_ENDPOINT: https://mensur.free.beeceptor.com
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RecentUsersTable
+      Events:
+        UserSignup:
+          Type: SNS
+          Properties:
+            Topic: arn:aws:sns:eu-central-1:650150117008:UserSignupTopic
+
+  RecentUsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: recent_user_signups
+      AttributeDefinitions:
+        - AttributeName: user_id
+          AttributeType: N
+      KeySchema:
+        - AttributeName: user_id
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 2
+        WriteCapacityUnits: 2
+      TimeToLiveSpecification:
+        AttributeName: expires_on
+        Enabled: True
+
