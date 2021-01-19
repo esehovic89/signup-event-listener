@@ -1,4 +1,4 @@
-##Setup 
+## Setup 
 
 To deploy and run the code on AWS execute the commands below via aws cli tool.
 Make sure your user has the necessary privileges to create the needed resources.
