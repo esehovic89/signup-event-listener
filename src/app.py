@@ -1,6 +1,6 @@
 import urllib.request
+from urllib.error import URLError, HTTPError
 import json
-import logging
 import boto3
 import time
 import os
@@ -12,11 +12,9 @@ MESSAGE_TEMPLATE_INTRO = "Hi {}, welcome to komoot. "
 MESSAGE_TEMPLATE_SUFFIX = " also joined recently"
 TTL_IN_SECONDS = 300
 
-
 table_name = os.environ['TABLE_NAME']
 region_name = os.environ['REGION_NAME']
 notification_endpoint = os.environ['NOTIFICATION_ENDPOINT']
-
 
 client = boto3.resource('dynamodb', region_name=region_name)
 table = client.Table(table_name)
@@ -24,7 +22,7 @@ table = client.Table(table_name)
 
 def lambda_handler(event, context):
     sns_message_payload = json.loads(event['Records'][0]['Sns']['Message'])
-    logging.info("Received message: {}", sns_message_payload)
+    print("Received message: {}".format(sns_message_payload))
 
     user_name = sns_message_payload['name']
     user_id = sns_message_payload['id']
@@ -33,6 +31,17 @@ def lambda_handler(event, context):
     post_notification(request_body)
     add_recent_signup(user_id, user_name)
 
+def create_notification_service_payload(user_name, user_id):
+    recent_signups = get_recent_signups()
+    recent_ids = [int(item['user_id']) for item in recent_signups]
+    recent_names = [item['user_name'] for item in recent_signups]
+
+    return {
+        "sender": SENDER_EMAIL,
+        "receiver": user_id,
+        "message": create_user_message(user_name, recent_names),
+        "recent_user_ids": recent_ids
+    }
 
 def get_recent_signups():
     current_epoch_in_seconds = int(time.time())
@@ -49,31 +58,21 @@ def add_recent_signup(user_id, user_name):
         'user_name': user_name,
         'expire_on': expire_on
     })
-    logging.info("User with ID: {} added".format(user_id))
-
-
-def create_notification_service_payload(user_name, user_id):
-    recent_signups = get_recent_signups()
-    recent_ids = [int(item['user_id']) for item in recent_signups]
-    recent_names = [item['user_name'] for item in recent_signups]
-
-    logging.info(recent_signups)
-    notification_message = {
-        "sender": SENDER_EMAIL,
-        "receiver": user_id,
-        "message": create_user_message(user_name, recent_names),
-        "recent_user_ids": recent_ids
-    }
-
-    return notification_message
+    print("User with ID: {} added to recent signups".format(user_id))
 
 def post_notification(body):
     notification_request = urllib.request.Request(notification_endpoint)
     notification_request.add_header('Content-Type', 'application/json; charset=utf-8')
-    jsondata = json.dumps(body)
-    jsondataasbytes = jsondata.encode('utf-8')
-    notification_request.add_header('Content-Length', len(jsondataasbytes))
-    return urllib.request.urlopen(notification_request, jsondataasbytes)
+    json_body = json.dumps(body)
+    json_body_as_bytes = json_body.encode('utf-8')
+    notification_request.add_header('Content-Length', len(json_body_as_bytes))
+    try:
+        return urllib.request.urlopen(notification_request, json_body_as_bytes)
+
+    except HTTPError as exc:
+        print("Notification request failed. Error code: {}".format(exc.code))
+    except URLError as exc:
+        print("Failed to reach the server due to: {}".format(exc.reason))
 
 
 def create_user_message(user_name, recent_names):
