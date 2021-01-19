@@ -90,7 +90,3 @@ def create_user_message(user_name, recent_names):
 
     else:
         return first_sentence
-
-
-if __name__ == "__main__":
-    lambda_handler("a", "b")
